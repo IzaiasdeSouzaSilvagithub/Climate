@@ -6,3 +6,4 @@ Example 1 - TerraClimate and ERA5 Land data sets.
 Example 2 - Brazilian Daily Weather Gridded Data (BR-DWGD).
 ### <a href="https://code.earthengine.google.com/4b9c64bd511d5ee2da40b8bea3dfb9d0">  BR-DWGD Time Series
 
+![Precipitation BR-DWGD](URL-da-imagem)
