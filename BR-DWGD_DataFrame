@@ -1,0 +1,134 @@
+# Bloco 1: Monte o Google Drive e carregue o arquivo CSV exportado do GEE para análise com Pandas.
+
+from google.colab import drive
+import pandas as pd
+import re
+
+drive.mount('/content/drive')
+
+file_path = '/content/drive/Drive/Time_Series_pr.csv'
+
+df = pd.read_csv(file_path)
+
+print("Informações do arquivo original:")
+print(df.info())
+print("\nPrimeiras 5 linhas:")
+print(df.head())
+
+
+
+
+
+# Bloco 2: Transforme dados aninhados de séries temporais em um formato tabular estruturado.
+def processar_lista_string(string_lista):
+    """Processa string que representa uma lista removendo colchetes e dividindo por vírgulas"""
+    string_limpa = string_lista.strip('[]').replace(' ', '')
+    return string_limpa.split(',')
+
+dados_processados = []
+
+for index, row in df.iterrows():
+    cidade = row['id']
+
+    datas_str = processar_lista_string(row['datas'])
+    valores_str = processar_lista_string(row['valores'])
+
+    for data_str, valor_str in zip(datas_str, valores_str):
+        try:
+            data = pd.to_datetime(data_str.strip("'\" "))
+            valor = float(valor_str.strip("'\" "))
+
+            dados_processados.append({
+                'CIDADE': cidade,
+                'ANO': data.year,
+                'MES': data.month,
+                'DIA': data.day,
+                'DATA_COMPLETA': data,
+                'pr': valor
+            })
+        except Exception as e:
+            print(f"Erro ao processar: data={data_str}, valor={valor_str}, erro={e}")
+
+DataFrameOrganized = pd.DataFrame(dados_processados)
+
+DataFrameOrganized = DataFrameOrganized[['ANO', 'MES', 'DIA', 'CIDADE', 'pr', 'DATA_COMPLETA']]
+
+print("\nPrimeiras 3 linhas do DataFrame organizado:")
+display(DataFrameOrganized.head(3))
+
+
+
+
+
+# Bloco 3: Filtre por cidades específicas e plote suas séries temporais de precipitação.
+cidades_disponiveis = DataFrameOrganized['CIDADE'].unique()
+print(cidades_disponiveis)
+
+cidades_procuradas = ['Goiânia', 'Formosa']
+cidades_encontradas = []
+
+for cidade in cidades_procuradas:
+    if cidade in cidades_disponiveis:
+        cidades_encontradas.append(cidade)
+        print(f"Cidade encontrada: {cidade}")
+
+if not cidades_encontradas:
+    print("Nenhuma das cidades solicitadas foi encontrada. Cidades disponíveis:")
+    for cidade in cidades_disponiveis:
+        print(f"- {cidade}")
+else:
+    dados_cidades = DataFrameOrganized[DataFrameOrganized['CIDADE'].isin(cidades_encontradas)]
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    plt.figure(figsize=(15, 8))
+
+    for cidade in cidades_encontradas:
+        dados_cidade = dados_cidades[dados_cidades['CIDADE'] == cidade]
+
+        dados_agrupados = dados_cidade.groupby('DATA_COMPLETA')['pr'].mean().reset_index()
+
+        plt.plot(dados_agrupados['DATA_COMPLETA'], dados_agrupados['pr'],
+                label=cidade, linewidth=1, alpha=0.8)
+
+    plt.title('Série Temporal da Precipitação', fontsize=16, fontweight='bold')
+    plt.xlabel('Data', fontsize=12)
+    plt.ylabel('Precipitação (mm)', fontsize=12)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+
+# Bloco 4: Plote a precipitação média diária com intervalo de confiança.
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+selected_cities_data = DataFrameOrganized[DataFrameOrganized['CIDADE'].isin(['Formosa'])].copy()
+
+selected_cities_data['DOY'] = selected_cities_data['DATA_COMPLETA'].dt.dayofyear
+
+plt.figure(figsize=(15, 8))
+sns.lineplot(data=selected_cities_data, x='DOY', y='pr', hue='CIDADE')
+
+plt.title('Média de Precipitação por dia do Ano em Formosa-GO', fontsize=16, fontweight='bold')
+plt.xlabel('Dia do Ano', fontsize=12)
+plt.ylabel('Precipitação Média (mm)', fontsize=12)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+# Bloco 5: salve o DataFrame em um arquivo Excel.
+output_path = '/content/drive/Drive/DataFrameOrganized.xlsx'
+DataFrameOrganized.to_excel(output_path, index=False)
+
+print(f"DataFrame organizado salvo em: {output_path}")
