@@ -1,0 +1,222 @@
+/* 
+
+This script was developed solely for demonstration purposes of processing the Brazilian Daily Weather Gridded Data (https://doi.org/10.1002/joc.7731).
+
+Specifically, the script performs the extraction of daily climate time series for 38 cities in the state of Goiás.
+
+The script can be adapted for other points and variables of interest available in the dataset, provided that the scale and offset parameters are observed.
+
+Note: The longer the time window and the greater the number of points of interest, the longer the processing time will be.
+
+*/// 
+
+
+/// =======================================================  BOX 1: ===============================================================///
+// Load the data:
+var br_dwgd = ee.ImageCollection('projects/ee-alexandrexavier/assets/BR-DWGD');
+
+// Scale and Offset to be applied.
+var BAND_Rs_MULT = 0.15708661; 
+var BAND_Rs_ADD = -0.057087;
+var BAND_Rs_UNIT= 'MJ m-2';
+var BAND_u2_MULT = 0.05905512; 
+var BAND_u2_ADD = -0.059055;
+var BAND_u2_UNIT= 'm s-1';
+var BAND_Tmax_MULT = 0.00106815; 
+var BAND_Tmax_ADD = 15.0;
+var BAND_Tmax_UNIT= 'Celcius degrees';
+var BAND_Tmin_MULT = 0.00106815; 
+var BAND_Tmin_ADD = 15.0;
+var BAND_Tmin_UNIT= 'Celcius degrees';
+var BAND_RH_MULT = 0.39370079; 
+var BAND_RH_ADD = -0.393701;
+var BAND_RH_UNIT= '%';
+var BAND_pr_MULT = 0.00686666; 
+var BAND_pr_ADD = 225.0;
+var BAND_pr_UNIT= 'mm';
+var BAND_ET_MULT = 0.0511811; 
+var BAND_ET_ADD = 0.0;
+var BAND_ET_UNIT= 'mm';
+var color_pal = ['000066', '001199', '0044BB', '0077DD', '33AAEE', '66CCFF', 'FFDDCC', 'FFBB99', 'FF9966', 'FF6644'];
+
+
+/// =======================================================  BOX 2: ===============================================================///
+/* Dataset variables:
+ET: Evapotranspiration (mm/FAO56)
+pr: Precipitation (mm)
+RH: Relative Humidity (%)
+Rs: Solar Radiation (MJ/m²)
+Tmax: Maximum Temperature (°C)
+Tmin: Minimum Temperature (°C)
+u2: Wind Speed at 2 Meters (m/s)
+
+Note: For more details, you can see --> https://sites.google.com/site/alexandrecandidoxavierufes/brazilian-daily-weather-gridded-data?authuser=0.
+
+*/
+
+// In the case I will use the daily 'pr'.
+var band = 'pr';
+var var_band = br_dwgd.select(band);
+
+// Set scale and offset to rescale.
+var scale = BAND_pr_MULT;
+var offset = BAND_pr_ADD;
+var vis = {min:0, max:40, palette:color_pal};
+
+
+/// =======================================================  BOX 3: ===============================================================///
+// Function to apply the scaling factor to a specific band.
+var scaleBand = function(image) {
+  var scaledImage = image.select(band).multiply(scale).add(offset);
+  return scaledImage.copyProperties(image, image.propertyNames());
+};
+
+
+/// =======================================================  BOX 4: ===============================================================///
+// Get the data.
+var var_band_scale = br_dwgd.map(scaleBand);
+Map.addLayer(var_band_scale.first(), vis, band);
+print(var_band_scale.first());
+
+
+/// =======================================================  BOX 5: ===============================================================///
+var cities = [
+    {'name': 'Alexânia', 'lon': -48.506177, 'lat': -16.083820},
+    {'name': 'Alto Paraíso de Goiás', 'lon': -47.517748, 'lat': -14.137420},
+    {'name': 'Anápolis', 'lon': -48.9528, 'lat': -16.3267},
+    {'name': 'Aparecida de Goiânia', 'lon': -49.2439, 'lat': -16.8222},
+    {'name': 'Águas Lindas de Goiás', 'lon': -48.2817, 'lat': -15.7611},
+    {'name': 'Caldas Novas', 'lon': -48.6256, 'lat': -17.7442},
+    {'name': 'Campos Belos', 'lon': -46.7714, 'lat': -13.0369},
+    {'name': 'Catalão', 'lon': -47.9464, 'lat': -18.1689},
+    {'name': 'Cavalcante', 'lon': -47.4583, 'lat': -13.7975},
+    {'name': 'Ceres', 'lon': -49.5986, 'lat': -15.3083},
+    {'name': 'Formosa', 'lon': -47.3339, 'lat': -15.5369},
+    {'name': 'Goianésia', 'lon': -49.1167, 'lat': -15.3167},
+    {'name': 'Goiás', 'lon': -50.1400, 'lat': -15.9333},
+    {'name': 'Goiatuba', 'lon': -49.3547, 'lat': -18.0128},
+    {'name': 'Goiânia', 'lon': -49.2539, 'lat': -16.6786},
+    {'name': 'Ipameri', 'lon': -48.1594, 'lat': -17.7219},
+    {'name': 'Iporá', 'lon': -51.1178, 'lat': -16.4419},
+    {'name': 'Itaberaí', 'lon': -49.8100, 'lat': -16.0200},
+    {'name': 'Itapuranga', 'lon': -50.1419, 'lat': -15.5619},
+    {'name': 'Itumbiara', 'lon': -49.2153, 'lat': -18.4192},
+    {'name': 'Jataí', 'lon': -51.7131, 'lat': -17.8822},
+    {'name': 'Luziânia', 'lon': -47.9500, 'lat': -16.2528},
+    {'name': 'Mineiros', 'lon': -52.5531, 'lat': -17.5694},
+    {'name': 'Minaçu', 'lon': -48.2203, 'lat': -13.5306},
+    {'name': 'Morrinhos', 'lon': -49.1008, 'lat': -17.7311},
+    {'name': 'Novo Gama', 'lon': -48.0369, 'lat': -16.0583},
+    {'name': 'Palmeiras de Goiás', 'lon': -49.9258, 'lat': -16.8050},
+    {'name': 'Petrolina de Goiás', 'lon': -49.3386, 'lat': -16.0950},
+    {'name': 'Pires do Rio', 'lon': -48.2794, 'lat': -17.3019},
+    {'name': 'Planaltina', 'lon': -47.6142, 'lat': -15.4528},
+    {'name': 'Porangatu', 'lon': -49.1486, 'lat': -13.4408},
+    {'name': 'Posse', 'lon': -46.3694, 'lat': -14.0931},
+    {'name': 'Rio Verde', 'lon': -50.9289, 'lat': -17.7978},
+    {'name': 'Senador Canedo', 'lon': -49.0917, 'lat': -16.7083},
+    {'name': 'São Domingos', 'lon': -46.3183, 'lat': -13.3983},
+    {'name': 'São Luiz de Montes Belos', 'lon': -50.3725, 'lat': -16.5250},
+    {'name': 'Uruaçu', 'lon': -49.1408, 'lat': -14.5247},
+    {'name': 'Valparaíso de Goiás', 'lon': -47.9750, 'lat': -16.0650}
+];
+
+// Convert city array to GEE features.
+var points = cities.map(function(cidade) {
+    return ee.Feature(
+        ee.Geometry.Point([cidade.lon, cidade.lat]), 
+        {
+            'id': cidade.name,
+            'nome': cidade.name,  
+            'longitude': cidade.lon,
+            'latitude': cidade.lat
+        }
+    );
+});
+
+
+// Criate the FeatureCollection.
+var pontosCollection = ee.FeatureCollection(points);
+
+// Add points to the map for visualization.
+Map.addLayer(pontosCollection, {color: 'red'}, 'Grid of interest');
+Map.centerObject(pontosCollection, 7);
+
+// Displaying information on the console.
+print('Number of cities selected:', pontosCollection.size());
+print('List of cities selected:', pontosCollection.aggregate_array('nome'));
+
+
+/// =======================================================  BOX 6: ===============================================================///
+function extrairSerieTemporal(ponto, colecaoImagens, banda, escala, offset) {
+  // Filter images by period.
+  var colecaoFiltrada = colecaoImagens.filterDate('1961-01-01', '2024-01-01');
+  // Create function to extract value from each image.
+  var extrairValor = function(imagem) {
+    // Apply scale and offset.
+    var valor = imagem.select(banda).multiply(escala).add(offset);
+    var valorPonto = valor.reduceRegion({
+      reducer: ee.Reducer.mean(),
+      geometry: ponto.geometry(),
+      scale: 1000,
+      bestEffort: true
+    });
+    // Feature and properities.
+    return ee.Feature(null, {
+      'date': imagem.date().format('YYYY-MM-dd'),
+      'value': valorPonto.get(banda),
+      'latitude': ponto.geometry().coordinates().get(1),
+      'longitude': ponto.geometry().coordinates().get(0)
+    });
+  };
+  // Map over all images.
+  var serieTemporal = colecaoFiltrada.map(extrairValor);
+  return serieTemporal;
+}
+
+
+/// =======================================================  BOX 7: ===============================================================///
+// Extract the time series for each point.
+var seriesPorPonto = pontosCollection.map(function(ponto) {
+  var serie = extrairSerieTemporal(ponto, br_dwgd, band, scale, offset);
+  // Collect the results (a long time for many points).
+  var valores = serie.aggregate_array('value');
+  var datas = serie.aggregate_array('date');
+  return ponto.set({
+    'datas': datas,
+    'valores': valores,
+    'num_observacoes': valores.length()
+  });
+});
+
+
+/// =======================================================  BOX 8: ===============================================================///
+// Export it to your Google Drive.
+Export.table.toDrive({
+  collection: seriesPorPonto,
+  description: 'Time_Series_pr',
+  fileFormat: 'CSV',
+  selectors: ['id', 'latitude', 'longitude', 'num_observacoes', 'datas', 'valores']
+});
+
+
+/// =======================================================  BOX 9: ===============================================================///
+// Let's take the first point as an example to plot a short time serie.
+var primeiroPonto = ee.Feature(pontosCollection.first());
+var chartPonto = ui.Chart.image.series({
+  imageCollection: var_band_scale.filterDate('2023-01-01', '2024-01-01'),
+  region: primeiroPonto.geometry(),  
+  reducer: ee.Reducer.median(),        
+  scale: 1000
+}).setOptions({
+  title: 'Daily precipitation (2023-01-01 to 2024-12-31) at the first point',
+  hAxis: {title: 'Date'},
+  vAxis: {title: 'precipitation (mm)'},
+  lineWidth: 1,
+  pointSize: 3,
+  colors: ['blue']
+});
+
+print(chartPonto);
+
+// end.
