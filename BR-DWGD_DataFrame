@@ -6,7 +6,7 @@ import re
 
 drive.mount('/content/drive')
 
-file_path = '/content/drive/Drive/Time_Series_pr.csv'
+file_path = '/content/drive/MyDrive/Time_Series_pr.csv'
 
 df = pd.read_csv(file_path)
 
@@ -128,7 +128,7 @@ plt.show()
 
 
 # Bloco 5: salve o DataFrame em um arquivo Excel.
-output_path = '/content/drive/Drive/DataFrameOrganized.xlsx'
+output_path = '/content/drive/MyDrive/DataFrameOrganized.xlsx'
 DataFrameOrganized.to_excel(output_path, index=False)
 
 print(f"DataFrame organizado salvo em: {output_path}")
