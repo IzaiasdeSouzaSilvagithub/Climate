@@ -1,0 +1,244 @@
+/// ======================================================= BLOC 1 =============================================================== ///
+/*  
+
+This script was developed solely for demonstration purposes of processing the Brazilian Daily Weather Gridded Data (https://doi.org/10.1002/joc.7731).
+
+Specifically, script generates monthly and yearly average images for the specified space and time.
+
+The script can be adapted for other Federal Units of Brazil, time windows, and other variables of interest available in the dataset, provided that the user modifies these fields.
+
+Note: The longer the time window and the spatial area, the longer the processing time will be.
+
+*/// 
+
+
+
+// Load the data:
+var br_dwgd = ee.ImageCollection('projects/ee-alexandrexavier/assets/BR-DWGD');
+
+// Scale and Offset to be applied:
+var SCALE_FACTORS = {
+  'Rs': {mult: 0.15708661, add: -0.057087, unit: 'MJ m-2'},
+  'u2': {mult: 0.05905512, add: -0.059055, unit: 'm s-1'},
+  'Tmax': {mult: 0.00106815, add: 15.0, unit: 'Celcius degrees'},
+  'Tmin': {mult: 0.00106815, add: 15.0, unit: 'Celcius degrees'},
+  'RH': {mult: 0.39370079, add: -0.393701, unit: '%'},
+  'pr': {mult: 0.00686666, add: 225.0, unit: 'mm'},
+  'ET': {mult: 0.0511811, add: 0.0, unit: 'mm'}
+};
+
+// Variable to process:
+var BAND_NAME = 'pr'; // Modify for the variable of interest: ‘Rs’, ‘u2’, ‘Tmax’, ‘Tmin’, ‘RH’, ‘ET’.
+
+/* Dataset variables:
+ET: Evapotranspiration (mm/FAO56)
+pr: Precipitation (mm)
+RH: Relative Humidity (%)
+Rs: Solar Radiation (MJ/m²)
+Tmax: Maximum Temperature (°C)
+Tmin: Minimum Temperature (°C)
+u2: Wind Speed at 2 Meters (m/s)
+
+Note: For more details, you can see --> https://sites.google.com/site/alexandrecandidoxavierufes/brazilian-daily-weather-gridded-data?authuser=0.
+
+*/
+
+
+// Time window.
+var DATE_START = '1961-01-01';
+var DATE_END = '2024-01-01';
+
+// Space of interest.
+var spatial = ee.FeatureCollection('projects/ee-my-izaiasdesozua/assets/BR_UF')
+  .filter(ee.Filter.eq('NM_UF', 'Goiás'));
+var areaOfInterest = spatial;
+Map.addLayer(areaOfInterest, {color: 'red'}, 'Area of Interest');
+Map.centerObject(areaOfInterest, 6);
+
+
+/// ======================================================= BLOC 2 =============================================================== ///
+// Function to apply scale and offset.
+function scaleBand(image) {
+  var scaleInfo = SCALE_FACTORS[BAND_NAME];
+  var scaledImage = image.select(BAND_NAME)
+    .multiply(scaleInfo.mult)
+    .add(scaleInfo.add)
+    .rename(BAND_NAME);
+  return scaledImage.copyProperties(image, image.propertyNames());
+}
+
+// Function to calculate monthly total.
+function calculateMonthlyTotal(image) {
+  var date = ee.Date(image.get('system:time_start'));
+  var year = date.get('year');
+  var month = date.get('month');
+  var startDate = date.update({day: 1});
+  var endDate = startDate.advance(1, 'month');
+  var daysInMonth = endDate.difference(startDate, 'day');
+  if (BAND_NAME === 'pr') {
+    var monthlyTotal = image.select(BAND_NAME).multiply(daysInMonth);
+  } else {
+    var monthlyTotal = image.select(BAND_NAME);
+  }
+  
+  return monthlyTotal
+    .rename(BAND_NAME + '_monthly')
+    .set('year', year)
+    .set('month', month)
+    .set('system:time_start', startDate.millis());
+}
+
+function getMonthString(month) {
+  return month < 10 ? '0' + month : '' + month;
+}
+
+function calculateCorrectHistoricalMonthlyMean(month) {
+  var monthStr = getMonthString(month);
+
+  var monthlyCollection = br_dwgd
+    .filter(ee.Filter.calendarRange(month, month, 'month'))
+    .filterDate(DATE_START, DATE_END)
+    .map(scaleBand)
+    .map(calculateMonthlyTotal);
+  
+  var historicalMean = monthlyCollection.mean()
+    .rename(BAND_NAME + '_month_' + monthStr);
+  
+  return historicalMean.clip(areaOfInterest);
+}
+
+function calculateCorrectMonthlyClimatology() {
+  var monthlyImages = [];
+  
+  for (var month = 1; month <= 12; month++) {
+    var monthImage = calculateCorrectHistoricalMonthlyMean(month);
+    monthlyImages.push(monthImage);
+  }
+  
+  return ee.ImageCollection(monthlyImages);
+}
+
+function calculateCorrectHistoricalAnnualMean() {
+  var annualCollection = br_dwgd
+    .filterDate(DATE_START, DATE_END)
+    .map(scaleBand);
+  
+  if (BAND_NAME === 'pr') {
+    var years = ee.List.sequence(1961, 2023);
+    
+    var annualTotals = years.map(function(year) {
+      year = ee.Number(year);
+      var start = ee.Date.fromYMD(year, 1, 1);
+      var end = start.advance(1, 'year');
+      
+      var yearCollection = br_dwgd
+        .filterDate(start, end)
+        .map(scaleBand);
+      
+      var annualSum = yearCollection.select(BAND_NAME).sum();
+      
+      return annualSum
+        .rename(BAND_NAME + '_annual')
+        .set('year', year);
+    });
+    
+    var annualCollection = ee.ImageCollection(annualTotals);
+    var annualMean = annualCollection.mean()
+      .rename(BAND_NAME + '_annual_mean');
+      
+  } else {
+    var annualMean = annualCollection.select(BAND_NAME).mean()
+      .rename(BAND_NAME + '_annual_mean');
+  }
+  
+  return annualMean.clip(areaOfInterest);
+}
+
+/// ======================================================= BLOC 3 =============================================================== ///
+var scaledCollection = br_dwgd
+  .filterDate(DATE_START, DATE_END)
+  .map(scaleBand);
+
+var monthlyImages = [];
+
+for (var month = 1; month <= 12; month++) {
+  var monthImage = calculateCorrectHistoricalMonthlyMean(month);
+  monthlyImages.push(monthImage);
+}
+
+var monthlyClimatologyCorrected = ee.ImageCollection(monthlyImages);
+var annualMeanCorrected = calculateCorrectHistoricalAnnualMean();
+
+/// ======================================================= BLOC 4 =============================================================== ///
+var getPalette = function(bandName) {
+  var palettes = {
+    'pr': ['#e2ffed', '#b3ffd1', '#27c3ff', '#118eb4', '#1f3bff', '#102dff','#0b08b3', '#040d74'],
+    'Tmax': ['blue', 'yellow', 'red'],
+    'Tmin': ['purple', 'cyan', 'green'],
+    'Rs': ['brown', 'yellow', 'orange'],
+    'RH': ['white', 'lightblue', 'darkblue'],
+    'u2': ['white', 'lightgreen', 'darkgreen'],
+    'ET': ['white', 'lightgreen', 'darkgreen']
+  };
+  return palettes[bandName] || ['red', 'yellow', 'green'];
+};
+
+var getVisParams = function(bandName) {
+  var ranges = {
+    'pr': {min: 0, max: 300}, 
+    'Tmax': {min: 20, max: 35},
+    'Tmin': {min: 10, max: 25},
+    'Rs': {min: 10, max: 25},
+    'RH': {min: 40, max: 90},
+    'u2': {min: 0, max: 5},
+    'ET': {min: 0, max: 150}
+  };
+  var range = ranges[bandName] || {min: 0, max: 50};
+  return {
+    min: range.min,
+    max: range.max,
+    palette: getPalette(bandName)
+  };
+};
+
+var visParams = getVisParams(BAND_NAME);
+Map.addLayer(annualMeanCorrected, visParams, 'Média Anual - ' + BAND_NAME, false);
+
+var monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+for (var i = 0; i < 12; i++) {
+  Map.addLayer(monthlyImages[i], visParams, monthNames[i] + ' - ' + BAND_NAME, false);
+}
+
+/// ======================================================= BLOC 5 =============================================================== ///
+Export.image.toDrive({
+  image: annualMeanCorrected,
+  description: BAND_NAME + '_ANNUAL_MEAN_' + DATE_START.slice(0,4) + '_' + DATE_END.slice(0,4),
+  scale: 1000,
+  region: areaOfInterest,
+  maxPixels: 1e13,
+  fileFormat: 'GeoTIFF',
+  formatOptions: {
+    cloudOptimized: true
+  }
+});
+
+
+var monthNamesExport = ['01_Jan', '02_Feb', '03_Mar', '04_Apr', '05_May', '06_Jun', 
+                       '07_Jul', '08_Aug', '09_Sep', '10_Oct', '11_Nov', '12_Dec'];
+
+for (var month = 1; month <= 12; month++) {
+  var monthImage = monthlyImages[month-1];
+  
+  Export.image.toDrive({
+    image: monthImage,
+    description: BAND_NAME + '_MONTHLY_' + monthNamesExport[month-1] + '_' + DATE_START.slice(0,4) + '_' + DATE_END.slice(0,4),
+    scale: 1000,
+    region: areaOfInterest,
+    maxPixels: 1e13,
+    fileFormat: 'GeoTIFF'
+  });
+}
+
+// end.
